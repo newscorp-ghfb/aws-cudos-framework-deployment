@@ -166,7 +166,7 @@ function print_help(){
         delete - deletes Athena table and QuickSight datasource, dataset and dashboard
         update - updates QuickSight dashboard to latest available version
         status - display status of dashboard creation
-        refresh-data - refreshes dataset in QuickSight SPICE
+        refresh_data - refreshes dataset in QuickSight SPICE
         change-source-location - changes path to s3 bucket with Trusted Advisor reports"
         
   exit 1
@@ -242,7 +242,7 @@ function status() {
     
 }
 
-function refreshdata() {
+function refresh_data() {
   aws quicksight create-ingestion --ingestion-id `date +%Y_%m_%H_%M` --aws-account-id ${account} --data-set-id ${dataSetId}
   echo "Refresh of dataset ${dataSetId} initiated"
 }

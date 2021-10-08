@@ -73,9 +73,9 @@ case "$action" in
     config
     update
   ;;
-  refresh-data)
+  refresh_data)
     config
-    refresh-data
+    refresh_data
   ;;
   change-source-location)
     change-source-location  
