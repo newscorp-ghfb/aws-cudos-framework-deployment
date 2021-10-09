@@ -45,8 +45,10 @@ while [ $# -gt 0 ]; do
 done
 
 check_aws_cli
+if [[ ! -z "$action" ]]; then
 get_aws_account
 export cli_input_json_dir="work/$account/cli_configs"
+fi
 
 if [ -z "${deploymentMode}" ]; then
   export deploymentMode="auto"
