@@ -1,6 +1,6 @@
 {
     "DataSetId": "${dataSetId}",
-    "Name": "ta-organizational-view",
+    "Name": "${dataSetId}",
     "Permissions": [
         {
             "Principal": "${user_arn}",
@@ -24,7 +24,7 @@
                 "DataSourceArn": "arn:aws:quicksight:${region}:${account}:datasource/${dataSourceId}",
                 "Catalog": "AwsDataCatalog",
                 "Schema": "${databaseName}",
-                "Name": "ta_organizational_view_reports",
+                "Name": "${athenaTable}",
                 "InputColumns": [
                     {
                         "Name": "ip address",
