@@ -183,17 +183,17 @@ function deploy() {
 
 function delete() {
   if [[ "$deploymentMode" == "auto" ]] ; then
-    echo "aws glue delete-table --database-name ${databaseName} --name ta_organizational_view_reports"
-    aws glue delete-table --database-name ${databaseName} --name ta_organizational_view_reports
-    echo "aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ta-organizational-view"
-    aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ta-organizational-view
-    echo "aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ta-organizational-view"
-    aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ta-organizational-view
-    echo "aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ta-organizational-view"
-    aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ta-organizational-view
+    echo "aws glue delete-table --database-name ${databaseName} --name ${athenaTable}"
+    aws glue delete-table --database-name ${databaseName} --name ${athenaTable}
+    echo "aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ${dataSourceId}"
+    aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ${dataSourceId}
+    echo "aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ${dataSetId}"
+    aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ${dataSetId}
+    echo "aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ${dashboardId}"
+    aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ${dashboardId}
   else
     echo "Please run the following commands to delete dashboard:
-    aws glue delete-table --database-name ${databaseName} --name ta_organizational_view_reports
+    aws glue delete-table --database-name ${databaseName} --name ${athenaTable}
     aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ${dataSourceId}
     aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ${dataSetId}
     aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ${dashboardId}

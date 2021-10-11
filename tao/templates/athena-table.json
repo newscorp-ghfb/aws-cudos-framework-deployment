@@ -4,7 +4,7 @@
     "TableInput": {
         "Name": "${athenaTable}",
         "StorageDescriptor": {
-            "Location": "${s3FolderPath}",
+            "Location": "${s3FolderPath}${PAYER}/",
             "Columns": [
                 {
                     "Name": "ip address",

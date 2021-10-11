@@ -1,7 +1,7 @@
 {
     "AwsAccountId": "${account}",
     "DashboardId": "${dashboardId}",
-    "Name": "Trusted Advisor Organizational View",
+    "Name": "TAO Dashboard (${payer})",
       "DashboardPublishOptions": {
         "AdHocFilteringOption": {
           "AvailabilityStatus": "DISABLED"
