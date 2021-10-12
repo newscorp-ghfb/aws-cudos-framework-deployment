@@ -3,6 +3,7 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 [[ -z $PAYER ]] && export PAYER='default'
+export PAYER_UPPER=$( echo "${PAYER}" | tr a-z A-Z )
 
 source "${DIR}/lib/common.sh"
 export sourceAccountId=223485597511
