@@ -201,6 +201,9 @@ function delete() {
     aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ${dashboardId}
       "
   fi
+  configFile="work/${account}/${PAYER}/config"
+  rm -f "${configFile}"
+  echo "cleanup ${configFile}"
 }
 
 function status() {
