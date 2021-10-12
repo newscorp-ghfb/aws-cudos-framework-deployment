@@ -28,12 +28,12 @@ function check_aws_cli() {
 
 function config() {
   # Check for config
-  if [ -e work/${account}/config ]; then
-    source "work/${account}/config"
+  if [ -e work/${account}/${PAYER}/config ]; then
+    source "work/${account}/${PAYER}/config"
     echo "
-    Config file detected work/${account}/config:"
+    Config file detected work/${account}/${PAYER}/config:"
     echo "----"
-    cat work/${account}/config
+    cat work/${account}/${PAYER}/config
     echo "----"
   fi
   if [ -z "${s3FolderPath}" ]; then
@@ -51,16 +51,18 @@ function config() {
   if [ -z "${databaseName}" ]; then
     get_athena_database_name
   fi
-  [[ -d "work/$account/" ]] || mkdir -p "work/$account/"
+  [[ -d "work/$account/$PAYER/" ]] || mkdir -p "work/$account/$PAYER/"
   echo "export region=${region}
 export databaseName=${databaseName}
 export s3FolderPath=${s3FolderPath}
 export aws_identity_region=${aws_identity_region}
 export user_arn=$user_arn
-export AWS_DEFAULT_REGION=${region}" > work/${account}/config
+export AWS_DEFAULT_REGION=${region}" > work/${account}/${PAYER}/config
   echo "
-  config file stored in \"work/${account}/config\"
+  config file stored in \"work/${account}/${PAYER}/config\"
   "
+  # NOTE export them again in case of all/some of them are set via args
+  source "work/${account}/${PAYER}/config"
 }
 
 function transform_templates() {
