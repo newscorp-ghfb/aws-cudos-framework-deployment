@@ -1,7 +1,7 @@
 {
     "AwsAccountId": "${account}",
     "DashboardId": "${dashboardId}",
-    "Name": "TAO Dashboard (${PAYER})",
+    "Name": "${PAYER_UPPER} TAO Dashboard",
     "Permissions": [
         {
           "Principal": "${user_arn}",
