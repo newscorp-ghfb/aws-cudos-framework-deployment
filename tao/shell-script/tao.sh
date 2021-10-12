@@ -3,14 +3,15 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+[[ -z $PAYER ]] && export PAYER='default'
 
 source "${DIR}/lib/common.sh"
 export sourceAccountId=223485597511
 export sourceTemplateId="ta-organizational-view"
-export dashboardId="ta-organizational-view"
-export dataSourceId="ta-organizational-view"
-export dataSetId="ta-organizational-view"
-export athenaTable="ta_organizational_view_reports"
+export dashboardId="${PAYER}-tao-dashboard"
+export dataSourceId="${PAYER}-tao-datasource"
+export dataSetId="${PAYER}-tao-dataset"
+export athenaTable="${PAYER}_tao_athena_table"
 export AWS_DEFAULT_OUTPUT="text"
 
 while [ $# -gt 0 ]; do
@@ -47,7 +48,7 @@ done
 check_aws_cli
 if [[ ! -z "$action" ]]; then
 get_aws_account
-export cli_input_json_dir="work/$account/cli_configs"
+export cli_input_json_dir="work/$account/$PAYER/cli_configs"
 fi
 
 if [ -z "${deploymentMode}" ]; then

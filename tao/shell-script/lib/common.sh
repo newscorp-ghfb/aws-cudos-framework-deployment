@@ -28,12 +28,12 @@ function check_aws_cli() {
 
 function config() {
   # Check for config
-  if [ -e work/${account}/config ]; then
-    source "work/${account}/config"
+  if [ -e work/${account}/${PAYER}/config ]; then
+    source "work/${account}/${PAYER}/config"
     echo "
-    Config file detected work/${account}/config:"
+    Config file detected work/${account}/${PAYER}/config:"
     echo "----"
-    cat work/${account}/config
+    cat work/${account}/${PAYER}/config
     echo "----"
     return 0
   fi
@@ -49,15 +49,17 @@ function config() {
   if [ -z "${databaseName}" ]; then
     get_athena_database_name
   fi
-  [[ -d "work/$account/" ]] || mkdir -p "work/$account/"
+  [[ -d "work/$account/$PAYER/" ]] || mkdir -p "work/$account/$PAYER/"
   echo "export region=${region}
 export databaseName=${databaseName}
 export s3FolderPath=${s3FolderPath}
 export user_arn=$user_arn
-export AWS_DEFAULT_REGION=${region}" > work/${account}/config
+export AWS_DEFAULT_REGION=${region}" > work/${account}/${PAYER}/config
   echo "
-  config file stored in \"work/${account}/config\"
+  config file stored in \"work/${account}/${PAYER}/config\"
   "
+  # NOTE export them again in case of all/some of them are set via args
+  source "work/${account}/${PAYER}/config"
 }
 
 function transform_templates() {
@@ -183,17 +185,17 @@ function deploy() {
 
 function delete() {
   if [[ "$deploymentMode" == "auto" ]] ; then
-    echo "aws glue delete-table --database-name ${databaseName} --name ta_organizational_view_reports"
-    aws glue delete-table --database-name ${databaseName} --name ta_organizational_view_reports
-    echo "aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ta-organizational-view"
-    aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ta-organizational-view
-    echo "aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ta-organizational-view"
-    aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ta-organizational-view
-    echo "aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ta-organizational-view"
-    aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ta-organizational-view
+    echo "aws glue delete-table --database-name ${databaseName} --name ${athenaTable}"
+    aws glue delete-table --database-name ${databaseName} --name ${athenaTable}
+    echo "aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ${dataSourceId}"
+    aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ${dataSourceId}
+    echo "aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ${dataSetId}"
+    aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ${dataSetId}
+    echo "aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ${dashboardId}"
+    aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ${dashboardId}
   else
     echo "Please run the following commands to delete dashboard:
-    aws glue delete-table --database-name ${databaseName} --name ta_organizational_view_reports
+    aws glue delete-table --database-name ${databaseName} --name ${athenaTable}
     aws quicksight delete-data-source --aws-account-id ${account} --data-source-id ${dataSourceId}
     aws quicksight delete-data-set --aws-account-id ${account} --data-set-id ${dataSetId}
     aws quicksight delete-dashboard --aws-account-id ${account} --dashboard-id ${dashboardId}

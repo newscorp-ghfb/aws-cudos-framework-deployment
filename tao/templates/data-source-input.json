@@ -1,6 +1,6 @@
 {
     "DataSourceId": "${dataSourceId}",
-    "Name": "ta-organizational-view",
+    "Name": "${dataSourceId}",
     "Type": "ATHENA",
     "DataSourceParameters": {
         "AthenaParameters": {
