@@ -249,7 +249,7 @@ function update() {
   echo "Checking for updates..."
   echo -n "Getting latest available source template version..."
   latest_template_version=$(aws quicksight describe-template --query 'Template.Version.VersionNumber' \
-      --aws-account-id ${sourceAccountId} --template-id ${sourceTemplateId} --region=us-east-1)
+      --aws-account-id ${sourceAccountId} --template-id ${sourceTemplateId} --region us-east-1)
   if [ $? -ne 0 ]
   then
      echo "unable to retreive latest template version number, please check you have requested accesss."
@@ -266,10 +266,10 @@ function update() {
      exit
   fi
   echo "current deployed template version is ${current_dashboard_source_version}"
-  if [ ${current_dashboard_source_version} -eq ${latest_template_version} ]; then
+  if [[ "${current_dashboard_source_version}" -eq "${latest_template_version}" ]]; then
       echo "You have the latest version deployed, no update required, exiting"
       exit
-  elif [ ${current_dashboard_source_version} -gt ${latest_template_version} ]; then
+  elif [[ "${current_dashboard_source_version}" -gt "${latest_template_version}" ]]; then
       echo "Error: Your deployed version is newer than the latest template, please check your installation, exiting"
       exit
   fi

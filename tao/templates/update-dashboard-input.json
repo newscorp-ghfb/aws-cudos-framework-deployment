@@ -1,7 +1,7 @@
 {
     "AwsAccountId": "${account}",
     "DashboardId": "${dashboardId}",
-    "Name": "${PAYER_UPPER} TAO Dashboard",
+    "Name": "${PAYER_UPPER} TAO",
       "DashboardPublishOptions": {
         "AdHocFilteringOption": {
           "AvailabilityStatus": "DISABLED"
