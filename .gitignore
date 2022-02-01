@@ -1,10 +1,40 @@
 tmp
 
-*/work/
+# Working files for legacy (bash) automation
+*/*/work/
 
 *~
 *#
 *.swp
+*.log
+
+# Python specific
+build/
+dist/
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+/.coverage
+/.coverage.*
+/.cache
+/.pytest_cache
+/.mypy_cache
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode
+.idea/
 
 # Files that might appear in the root of a volume
 .DS_Store
@@ -17,3 +47,6 @@ tmp
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
+
+#Local dev and testing files
+cfn-templates/parameters.local
