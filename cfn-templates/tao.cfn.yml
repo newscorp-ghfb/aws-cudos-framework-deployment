@@ -1275,7 +1275,7 @@ Resources:
         - ''
         - - !FindInMap [ "Definitions", "taoDashboardId", "Value" ]
           - !Ref taoSuffix 
-      Name: !Join [ '' , [ 'Trusted Advisor Organizational View' ,  !Ref taoSuffix ] ]
+      Name: !Join [ '' , [ !Ref taoSuffix , ' Trusted Advisor' ] ]
       Permissions:
       - Principal: !Sub
         - 'arn:aws:quicksight:${Region}:${AWS::AccountId}:user/default/${Username}'
