@@ -428,3 +428,5 @@ Resources:
     Properties:
       EventSourceArn: !GetAtt TaskQueue.Arn
       FunctionName: !GetAtt LambdaFunction.Arn
+    DependsOn:
+      - EventPermission

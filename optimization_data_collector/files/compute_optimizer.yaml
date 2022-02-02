@@ -38,6 +38,7 @@ Parameters:
         - aws-well-architected-labs-frankfurt
         - aws-well-architected-labs-london
         - aws-well-architected-labs-stockholm
+        - aws-well-architected-labs-sydney
   CodeKey:
     Type: String
     Description: file name of ZipFile with data code
@@ -287,6 +288,8 @@ Resources:
     Properties:
       EventSourceArn: !Ref S3CrawlerQue
       FunctionName: !GetAtt CrawlerFunction.Arn
+    DependsOn:
+      - LambdaCrawlerInvokePermission
   EC2Crawler:
     Type: AWS::Glue::Crawler
     Properties:
