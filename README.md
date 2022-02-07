@@ -1,5 +1,25 @@
 # Cloud Intelligence Dashboards (CUDOS Framework)
 
+## News Corp Customisation
+
+### Changes
+
+- add optimization data collector files for customisation and uploaded to ap-southeast-2 region
+- rename tao dashboard in cfn
+
+### Legacy changes
+
+- rename dashboard
+- deploy multi-payers TAO dashboard in a QuickSight
+- bugfix: refresh-data not a valid identifier
+
+### Documentation
+
+- [Cost Intelligence and Trusted Advisor Org Dashboard](https://newscorp.atlassian.net/l/c/e5A92FrC)
+
+
+---
+
 [![PyPI version](https://badge.fury.io/py/cid-cmd.svg)](https://badge.fury.io/py/cid-cmd)
 
 ## Welcome to Cloud Intelligence Dashboards (CUDOS Framework) automation repository
