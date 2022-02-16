@@ -2,8 +2,12 @@ import json
 import questionary
 from cid.helpers import Athena
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 class CUR:
-    requiredColumns = [
+    curRequiredColumns = [
         'identity_line_item_id',
         'identity_time_interval',
         'bill_invoice_id',
@@ -19,6 +23,24 @@ class CUR:
         'line_item_product_code',
         'line_item_usage_type',
         'line_item_operation',
+    ]
+    riRequiredColumns = [
+        'reservation_reservation_a_r_n',
+        'reservation_effective_cost',
+        'reservation_start_time',
+        'reservation_end_time',
+        'pricing_lease_contract_length',
+        'pricing_offering_class',
+        'pricing_purchase_option'
+    ]
+    spRequiredColumns = [
+        'savings_plan_savings_plan_a_r_n',
+        'savings_plan_savings_plan_effective_cost',
+        'savings_plan_start_time',
+        'savings_plan_end_time',
+        'savings_plan_purchase_term',
+        'savings_plan_offering_type',
+        'savings_plan_payment_option'
     ]
     _tableName = None
     _metadata = None
@@ -40,7 +62,7 @@ class CUR:
                 'athena': Athena(self.session)
             })
         return self._clients.get('athena')
-    
+
     @athena.setter
     def athena(self, client) -> Athena:
         if not self._clients.get('athena'):
@@ -57,7 +79,6 @@ class CUR:
                 self._configured = True
             else:
                 self._configured = False
-        
         return self._configured
 
     @property
@@ -76,19 +97,17 @@ class CUR:
     @property
     def hasReservations(self) -> bool:
         if self._configured and self._hasReservations is None:
-            kwargs = {
-                'cur_table_name': self._tableName
-            }
-            self._hasReservations = bool(len(self.athena.execute_ahq('hasReservations', **kwargs)))
+            logger.debug(f'{self.riRequiredColumns}: {[c in self.fields for c in self.riRequiredColumns]}')
+            self._hasReservations=all([c in self.fields for c in self.riRequiredColumns])
+            logger.info(f'Reserved Instances: {self._hasReservations}')
         return self._hasReservations
 
     @property
     def hasSavingsPlans(self) -> bool:
         if self._configured and self._hasSavingsPlans is None:
-            kwargs = {
-                'cur_table_name': self._tableName
-            }
-            self._hasSavingsPlans = bool(len(self.athena.execute_ahq('hasSavingsPlans', **kwargs)))
+            logger.debug(f'{self.spRequiredColumns}: {[c in self.fields for c in self.spRequiredColumns]}')
+            self._hasSavingsPlans=all([c in self.fields for c in self.spRequiredColumns])
+            logger.info(f'Savings Plans: {self._hasSavingsPlans}')
         return self._hasSavingsPlans
 
     @property
@@ -102,8 +121,10 @@ class CUR:
                 # Filter tables having CUR structure
                 for table in tables.copy():
                     columns = [c.get('Name') for c in table.get('Columns')]                    
-                    if not all([c in columns for c in self.requiredColumns]):
+                    if not all([c in columns for c in self.curRequiredColumns]):
                         tables.remove(table)
+                # Sort tables by name (desc)
+                tables.sort(key=lambda x: x.get('Name'), reverse=True)
                 if len(tables) == 1:
                     self._metadata = tables[0]
                     self._tableName = self._metadata.get('Name')
