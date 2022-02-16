@@ -15,7 +15,7 @@ from string import Template
 import json
 
 from pathlib import Path
-from botocore.exceptions import NoCredentialsError, CredentialRetrievalError
+from botocore.exceptions import ClientError, NoCredentialsError, CredentialRetrievalError
 
 from deepmerge import always_merger
 
@@ -145,6 +145,10 @@ class Cid:
             print('Error: Not authenticated, please check AWS credentials')
             logger.info('Not authenticated, exiting')
             exit()
+        except ClientError as e:
+            print(f'Error: {e}')
+            logger.info(f'Error: {e}')
+            exit()
         print('\taccountId: {}\n\tAWS userId: {}'.format(
             self.awsIdentity.get('Account'),
             self.awsIdentity.get('Arn').split(':')[5]
@@ -186,20 +190,20 @@ class Cid:
         selection = list()
         for k, dashboard in self.resources.get('dashboards').items():
             selection.append(
-                questionary.Choice(
-                    title=f"{dashboard.get('name')}",
-                    value=k
-                )
+                questionary.Choice(title=f"{dashboard.get('name')}", value=k)
             )
         try:
             selected_dashboard = questionary.select(
                 "Please select dashboard to install",
                 choices=selection
             ).ask()
-        except:
-            print('\nEnd: No updates available or dashboard(s) is/are broken\n')
+        except Exception as e:
+            logger.debug(e, stack_info=True)
+            print(f'\nEnd: {e}\n')
             return
-
+        if not selected_dashboard:
+            print('No dashboard selected')
+            return
         # Get selected dashboard definition
         dashboard_definition = self.resources.get(
             'dashboards').get(selected_dashboard)
@@ -259,6 +263,7 @@ class Cid:
             # Catch exception and dump a reason
             click.echo('failed, dumping error message')
             print(json.dumps(e, indent=4, sort_keys=True, default=str))
+            self.delete(dashboard_definition.get('dashboardId'))
             exit(1)
 
         return dashboard.get('dashboardId')
@@ -295,10 +300,13 @@ class Cid:
         """Check QuickSight dashboard status"""
 
         if not dashboard_id:
-            dashboard_id = self.qs.select_dashboard(force=True)
-            if not dashboard_id:
-                click.echo('No deployed dashboard found')
-                return
+            if not self.qs.dashboards:
+                print('\nNo deployed dashboards found')
+                exit()
+            else:
+                dashboard_id = self.qs.select_dashboard(force=True)
+                if not dashboard_id:
+                    exit()
             dashboard = self.qs.dashboards.get(dashboard_id)
         else:
             # Describe dashboard by the ID given, no discovery
@@ -316,10 +324,13 @@ class Cid:
         """Delete QuickSight dashboard"""
 
         if not dashboard_id:
-            dashboard_id = self.qs.select_dashboard(force=True)
-        if not dashboard_id:
-            click.echo('No selection, exiting.')
-            exit()
+            if not self.qs.dashboards:
+                print('\nNo deployed dashboards found')
+                exit()
+            else:
+                dashboard_id = self.qs.select_dashboard(force=True)
+                if not dashboard_id:
+                    exit()
         try:
             # Execute query
             click.echo('Deleting dashboard...', nl=False)
@@ -334,13 +345,35 @@ class Cid:
             print(json.dumps(e, indent=4, sort_keys=True, default=str))
 
 
+    def cleanup(self):
+        """Delete unused resources (QuickSight datasets, Athena views)"""
+
+        self.qs.discover_dashboards()
+        self.qs.discover_datasets()
+        used_datasets = [x for v in self.qs.dashboards.values() for x in v.datasets.values() ]
+        for v in list(self.qs._datasets.values()):
+            if v.get('Arn') not in used_datasets:
+                logger.info(f'Deleting dataset {v.get("Name")} ({v.get("Arn")})')
+                self.qs.delete_dataset(v.get('DataSetId'))
+                logger.info(f'Deleted dataset {v.get("Name")} ({v.get("Arn")})')
+                print(f'Deleted dataset {v.get("Name")} ({v.get("Arn")})')
+            else:
+                print(f'Dataset {v.get("Name")} ({v.get("Arn")}) is in use')
+
+
     def update(self, dashboard_id, **kwargs):
         """Update Dashboard"""
 
         if not dashboard_id:
-            dashboard_id = self.qs.select_dashboard(force=kwargs.get('force'))
-        if not dashboard_id:
-            exit()
+            if not self.qs.dashboards:
+                print('\nNo deployed dashboards found')
+                exit()
+            else:
+                dashboard_id = self.qs.select_dashboard(force=kwargs.get('force'))
+                if not dashboard_id:
+                    if not kwargs.get('force'):
+                        print('\nNo updates available or dashboard(s) is/are broken, use --force to allow selection\n')
+                    exit()
         dashboard = self.qs.dashboards.get(dashboard_id)
         if not dashboard:
             click.echo(f'Dashboard "{dashboard_id}" is not deployed')
@@ -395,11 +428,7 @@ class Cid:
         print('\nRequired datasets: \n - {}'.format('\n - '.join(required_datasets)))
         try:
             print('\nDetecting existing datasets...', end='')
-            for dataset in self.qs.list_data_sets():
-                try:
-                    self.qs.describe_dataset(dataset.get('DataSetId'))
-                except:
-                    continue
+            self.qs.discover_datasets()
         except self.qs.client.exceptions.AccessDeniedException:
             print('no permissions, performing full discrovery...', end='')
             self.qs.dashboards
@@ -467,35 +496,34 @@ class Cid:
                 except self.qs.client.exceptions.AccessDeniedException:
                     logger.info(f'Access denied trying to find dataset "{dataset_name}"')
                     pass
-                except:
-                    raise
+                except Exception as e:
+                    logger.debug(e, stack_info=True)
             print('complete')
 
         # If there still datasets missing try automatic creation
         if len(missing_datasets):
             missing_str = ', '.join(missing_datasets)
-            print(
-                f'\nThere are still {len(missing_datasets)} datasets missing: {missing_str}')
+            print(f'\nThere are still {len(missing_datasets)} datasets missing: {missing_str}')
             for dataset_name in missing_datasets[:]:
                 print(f'Creating dataset: {dataset_name}...', end='')
                 try:
-                    dataset_definition = self.resources.get(
-                        'datasets').get(dataset_name)
-
-                except:
-                    logger.critical(
-                        'dashboard definition is broken, unable to proceed.')
-                    logger.critical(
-                        f'dataset definition not found: {dataset_name}')
+                    dataset_definition = self.resources.get('datasets').get(dataset_name)
+                except Exception as e:
+                    logger.critical('dashboard definition is broken, unable to proceed.')
+                    logger.critical(f'dataset definition not found: {dataset_name}')
+                    logger.critical(e, stack_info=True)
                     raise
                 try:
                     if self.create_dataset(dataset_definition):
                         missing_datasets.remove(dataset_name)
-                        print('created')
+                        print(f'DataSet "{dataset_name}" creation created')
                     else:
-                        print('failed')
+                        print(f'DataSet "{dataset_name}" creation failed, collect debug log for more info')
                 except self.qs.client.exceptions.AccessDeniedException as AccessDeniedException:
                     print('unable to create, missing permissions: {}'.format(AccessDeniedException))
+                except Exception as e:
+                    logger.debug(e, stack_info=True)
+                    raise
 
         # Last chance to enter DataSetIds manually by user
         if len(missing_datasets):
@@ -519,7 +547,8 @@ class Cid:
                     self.qs._datasets.update({dataset_name: _dataset})
                     missing_datasets.remove(dataset_name)
                     print(f'\tFound, using it')
-                except:
+                except Exception as e:
+                    logger.debug(e, stack_info=True)
                     print(f"\tProvided DataSetId '{id}' can't be found\n")
                     continue
 
@@ -591,18 +620,16 @@ class Cid:
                     if dataset.get('DataSetPlaceholder') in datasets:
                         # check if the dataset exists by describing it
                         try:
-                            _dataset = self.qs.describe_dataset(
-                                dataset.get('DataSetArn').split('/')[1])
-                        except:
+                            _dataset = self.qs.describe_dataset(dataset.get('DataSetArn').split('/')[1])
+                        except Exception as e:
+                            logger.debug(e, stack_info=True)
                             continue
                         # Create a list of found datasets per dataset name
                         if not found_datasets.get(_dataset.get('Name')):
-                            found_datasets.update(
-                                {_dataset.get('Name'): dict()})
+                            found_datasets.update({_dataset.get('Name'): dict()})
                         # Add datasets using Arn as a key
                         if not found_datasets.get(_dataset.get('Name')).get(_dataset.get('Arn')):
-                            found_datasets.get(_dataset.get('Name')).update(
-                                {_dataset.get('Arn'): _dataset})
+                            found_datasets.get(_dataset.get('Name')).update({_dataset.get('Arn'): _dataset})
             except AttributeError:
                 # move to next saved deployment if the key is not present
                 continue
@@ -665,6 +692,7 @@ class Cid:
                 exit(1)
         else:
             self.athena.execute_query(view_query)
+        print(f'\nView "{view_name}" created')
 
 
     def get_view_query(self, view_name: str) -> str:

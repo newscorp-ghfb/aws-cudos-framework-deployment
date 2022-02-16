@@ -23,12 +23,17 @@ Parameters:
     Type: String
     MinLength: 3
     Default: REPLACE WITH CUR FOLDER AND PATH
-    Description: REQUIRED - Path to the s3 bucket folder that hosts the year partitions of CUR data. NOTE- Do not add trailing / . eg - BucketName/FolderName/.../FolderName
+    Description: REQUIRED - Path to the s3 bucket folder that hosts the year partitions of CUR data. NOTE- Do not add trailing / . eg - BucketName/FolderName/.../FolderName. Make sure quicksight has rad access to the CUR bucket
+  AthenaWorkgroup:
+    Type: String
+    MinLength: 3
+    Default: primary
+    Description: Athena workgroup to use, if you'd like a custom worgroup for athena queries please modify accordingly, this does not create a workgroup it attempts to use an existing workroup already defined in athena. 
   AthenaQueryResultsBucket:
     Type: String
     MinLength: 3
     Default: REPLACE WITH Athena S3 Bucket configured for athena query results(do not add a trailing slash)
-    Description: REQUIRED - Name of the s3 bucket configured for athena query results(do not add a trailing slash)
+    Description: REQUIRED - Name of the s3 bucket configured for athena query results for the workgroup defined above (do not add a trailing slash) . Make sure quicksight has read and right access to this bucket. 
   CURDatabaseName:
     Type:  String
     MinLength: 1
@@ -39,11 +44,6 @@ Parameters:
     MinLength: 1
     Default: REPLACE WITH Athena CUR TABLE
     Description: 'REQUIRED - Athena CUR Table name'
-  QuickSightDataSetRefreshSchedule:
-    Type: String
-    MinLength: 3
-    Default: cron(0 4 * * ? *)
-    Description: 'REQUIRED - cron expression on when to refresh spice datasets daily outside of business hours. Default is 4 AM utc, this should work for most customers in US and EU time zones' 
   Suffix:
     Type: String
     Description: OPTIONAL - If you need to create multiple instances of embedding sample on same aws account, add a short NUMERIC suffix here.
@@ -95,7 +95,8 @@ Resources:
                     - !Ref AWS::Region
                     - ':'
                     - !Ref AWS::AccountId
-                    - ':workgroup/primary'
+                    - ':workgroup/'
+                    - !Ref AthenaWorkgroup
               - Effect: Allow
                 Action:
                   - glue:GetDatabase
@@ -193,6 +194,7 @@ Resources:
         Variables:
           DatabaseName: !Ref CURDatabaseName
           TableName: !Ref CURTableName
+          AthenaWorkgroup: !Ref AthenaWorkgroup
           ViewTemplatesUri: 'https://raw.githubusercontent.com/aws-samples/aws-cudos-framework-deployment/main/cid/builtin/core/data/queries'
           ViewMetadataUri:  'https://raw.githubusercontent.com/aws-samples/aws-cudos-framework-deployment/main/cfn-templates'
                             
@@ -219,6 +221,7 @@ Resources:
           table_name = os.environ["TableName"]
           view_templates_uri = os.environ["ViewTemplatesUri"]
           view_metadata_uri = os.environ["ViewMetadataUri"]
+          athena_workgroup = os.environ["AthenaWorkgroup"]
 
           def lambda_handler(event, context):
               logger.info(f"Cloud formation {event['RequestType']} event,"
@@ -283,7 +286,7 @@ Resources:
                       response = athena.start_query_execution(
                           QueryString=view_code,
                           QueryExecutionContext={'Database': database_name},
-                          WorkGroup='primary'
+                          WorkGroup=athena_workgroup
                       )
                       logger.info('Completed step %s',step)
                   # Create a dummy account map. Can be modified later        
@@ -299,7 +302,7 @@ Resources:
                   response = athena.start_query_execution(
                       QueryString=account_map_query,
                       QueryExecutionContext={'Database': database_name},
-                      WorkGroup='primary',
+                      WorkGroup=athena_workgroup,
                   )
                   logger.info("Completed %s", step)
                   return(True, "Views created successfully")
@@ -316,7 +319,7 @@ Resources:
                       WHERE {fieldName} <> ''
                   """.strip(),
                   QueryExecutionContext={'Database': database_name},
-                  WorkGroup='primary'
+                  WorkGroup=athena_workgroup
               )['QueryExecutionId']
               while queryState in ['QUEUED','RUNNING']:
                   time.sleep(10)
@@ -346,7 +349,7 @@ Resources:
       Name: !Join [ '' , [ 'QSCURDataSource' ,  !Ref Suffix ] ]
       DataSourceParameters:
         AthenaParameters:
-          WorkGroup: primary
+          WorkGroup: !Ref AthenaWorkgroup
       Permissions:
         - Actions:
             - 'quicksight:DescribeDataSource'
@@ -2029,120 +2032,34 @@ Resources:
 
       VersionDescription: "1"
 
-  SpiceRefreshExecutionRole: #role needed to schedule spice ingestion for the datasets
-    Type: AWS::IAM::Role
-    Properties:
-      Path: /
-      RoleName: !Join
-        - ''
-        - - SpiceRefreshExecutionRole
-          - !Ref Suffix
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Policies:
-        - PolicyName: !Join
-          - ''
-          - - SpiceRefreshExecutionPolicy
-            - !Ref Suffix
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - quicksight:CreateIngestion
-                Resource:
-                  - Fn::Join: [ "/", [!GetAtt SummaryViewDataset.Arn , "ingestion", "*" ] ]
-                  - Fn::Join: [ "/", [!GetAtt EC2RunningCostDataset.Arn , "ingestion" , "*" ] ]
-                  - Fn::Join: [ "/", [!GetAtt ComputeSavinsPlanEligibleSpendDataset.Arn , "ingestion" , "*" ] ]
-                  - Fn::Join: [ "/", [!GetAtt S3ViewDataset.Arn, "ingestion" , "*" ] ]
-              - Effect: Allow
-                Action:
-                  - quicksight:ListDatasets
-                Resource:
-                  - !Sub arn:aws:quicksight:${AWS::Region}:${AWS::AccountId}:dataset/*
+Outputs:
+  Suffix:
+    Description: Suffix
+    #In case suffix is empty set suffix to _. In the import template, we need to select the second split value with delimiter  - 
+    Value: !Join [ "-" , [ "_",!Ref Suffix ] ]
+    Export: 
+      Name: !Sub '${AWS::StackName}-suffix'
 
-  SpiceRefreshLambdaCreator: #Function for dataset refresh
-    Type: AWS::Lambda::Function
-    Properties:
-      Runtime: python3.7
-      FunctionName: !Join
-        - ''
-        - - QSCUDOSRefreshDatasets
-          - !Ref Suffix
-      Handler: index.lambda_handler
-      MemorySize: 128
-      Role: !GetAtt SpiceRefreshExecutionRole.Arn
-      Timeout: 60
-      Environment:
-        Variables:
-          suffix: !Ref Suffix
-      Code:
-        ZipFile: |
-          import boto3
-          from datetime import datetime
-          import os
-          
-          DATASETS_TO_REFRESH = [
-              "ec2_running_cost" + os.environ['suffix'],
-              "s3_view" + os.environ['suffix'] , 
-              "summary_view" + os.environ['suffix'],
-              "compute_savings_plan_eligible_spend" + os.environ['suffix'],
-          ]
+  SummaryViewDatasetArn: 
+    Description: The summary view dataset ARN
+    Value: !GetAtt SummaryViewDataset.Arn
+    Export: 
+      Name: !Sub '${AWS::StackName}-SummaryViewDatasetArn'
+  EC2RunningCostDatasetArn: 
+    Description: The EC2RunningCost dataset ARN
+    Value: !GetAtt EC2RunningCostDataset.Arn
+    Export: 
+      Name: !Sub '${AWS::StackName}-EC2RunningCostDatasetArn'
+  ComputeSavinsPlanEligibleSpendDatasetArn: 
+    Description: The ComputeSavinsPlanEligibleSpendDataset view dataset ARN
+    Value: !GetAtt ComputeSavinsPlanEligibleSpendDataset.Arn
+    Export: 
+      Name: !Sub '${AWS::StackName}-ComputeSavinsPlanEligibleSpendDatasetArn'
+  S3ViewDatasetArn: 
+    Description: The S3 view dataset ARN
+    Value: !GetAtt S3ViewDataset.Arn
+    Export: 
+      Name: !Sub '${AWS::StackName}-S3ViewDatasetArn'
 
-          def get_account_id():
-              sts = boto3.client('sts')
-              account_id = sts.get_caller_identity()['Account']
-              print('account_id = ', account_id)
-              return account_id
-          
-          def refresh_datasets(account_id):
-              quicksight = boto3.client('quicksight')
-              datasets = quicksight.list_data_sets(AwsAccountId=account_id)
-              for dataset in datasets['DataSetSummaries']:
-                  name = dataset['Name']
-                  if dataset['ImportMode'] == 'SPICE' and name in DATASETS_TO_REFRESH:               
-                      ingestion_id = datetime.now().strftime("%d%m%y-%H%M%S-%f")
-                      print("Refreshing dataset {0}".format(name))
-                      res = quicksight.create_ingestion(
-                          AwsAccountId=account_id,
-                          DataSetId=dataset['DataSetId'],
-                          IngestionId=ingestion_id
-                        )
-                      print(res)
-
-          def lambda_handler(event, context):
-              account_id = get_account_id()
-              refresh_datasets(account_id)
-
-
-  SpiceRefreshRule:
-    Type: AWS::Events::Rule
-    Properties:
-      ScheduleExpression: !Ref QuickSightDataSetRefreshSchedule
-      Targets:
-        - Id: SpiceRefreshScheduler
-          Arn: !GetAtt SpiceRefreshLambdaCreator.Arn
-
-
-  InvokeLambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt SpiceRefreshLambdaCreator.Arn
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt SpiceRefreshRule.Arn
-
-
+  
+  

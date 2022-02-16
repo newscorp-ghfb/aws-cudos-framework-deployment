@@ -7,8 +7,6 @@ from pkg_resources import resource_string
 from string import Template
 import json
 
-import yaspin
-
 import logging
 logger = logging.getLogger(__name__)
 
@@ -47,9 +45,9 @@ class Athena():
                 self._status = 'AWS DataCatog of type GLUE not found'
             if len(glue_data_catalogs) == 1:
                 self._CatalogName = glue_data_catalogs.pop().get('CatalogName')
-            elif len(glue_data_catalogs) > 2:
+            elif len(glue_data_catalogs) > 1:
                 # Select default catalog if present
-                default_catalog = [d for d in glue_data_catalogs if d['CatalogName'] == self.defaults.get('_CatalogName')]
+                default_catalog = [d for d in glue_data_catalogs if d['CatalogName'] == self.defaults.get('CatalogName')]
                 if not len(default_catalog):
                     # Ask user
                     self._CatalogName = questionary.select(
@@ -104,7 +102,8 @@ class Athena():
         try:
             self.client.get_database(CatalogName=self.CatalogName, DatabaseName=DatabaseName).get('Database')
             return True
-        except:
+        except Exception as e:
+            logger.debug(e, stack_info=True)
             return False
 
     def list_table_metadata(self, DatabaseName: str=None) -> dict:
@@ -298,28 +297,3 @@ class Athena():
                 self.get_table_metadata(TableName=view_name)
             except self.client.exceptions.MetadataException:
                 pass
-
-
-    def update_views(self):
-        """ Update Athena views """
-        # TODO: check if needed
-        print('Loading views definitions', end='')
-        view_list = self.get_views(self.hasReservations, self.hasSavingsPlans)
-        print('done')
-        print('Updating views')
-        
-        for view in view_list.get('views'):
-            sp = yaspin(text=view.get('label'))
-            # Load query
-            sql_query = self.get_view(view.get('id')).get('query')
-            # Execute query
-            try:
-                query_id = self.athena.execute_query(sql_query=sql_query)
-                # Get results as list
-                response = self.athena.get_query_results(query_id)
-                # result = athena.parse_response_as_list(response)
-                sp.ok("✔")
-            except:
-                sp.fail("query failed")
-        
-        return True

@@ -61,7 +61,8 @@ class Dashboard():
     def deployed_version(self) -> int:
         try:
             return int(self.deployed_arn.split('/')[-1])
-        except:
+        except Exception as e:
+            logger.debug(e, stack_info=True)
             return 0
  
     @property
@@ -71,8 +72,12 @@ class Dashboard():
     @property
     def status(self) -> str:
         if not self._status:
+            # Deployment failed
+            if self.version.get('Status') not in ['CREATION_SUCCESSFUL']:
+                self._status = 'broken'
+                self.status_detail = f"{self.version.get('Status')}: {self.version.get('Errors')}"
             # Not dicovered yet
-            if not self.definition:
+            elif not self.definition:
                 self._status = 'undiscovered'
             # Missing dataset
             elif not self.datasets or (len(self.datasets) < len(self.definition.get('dependsOn').get('datasets'))):
@@ -80,10 +85,6 @@ class Dashboard():
                 self._status = 'broken'
                 logger.info(f"Found datasets: {self.datasets}")
                 logger.info(f"Required datasets: {self.definition.get('dependsOn').get('datasets')}")
-            # Deployment failed
-            elif self.version.get('Status') not in ['CREATION_SUCCESSFUL']:
-                self._status = 'broken'
-                self.status_detail = f"{self.version.get('Status')}: {self.version.get('Errors')}"
             # Source Template has changed
             elif self.deployed_arn and self.sourceTemplate.get('Arn') and not self.deployed_arn.startswith(self.sourceTemplate.get('Arn')):
                 self._status = 'legacy'
@@ -186,8 +187,9 @@ class QuickSight():
 
     @property
     def user(self) -> dict:
+        # TODO: Refactor QuickSight dynamic identity region detection
         if not self._user:
-            self._user =  self.describe_user('/'.join(self.awsIdentity.get('Arn').split('/')[-2:]))
+            self._user =  self.describe_user('/'.join(self.awsIdentity.get('Arn').split('/')[1:]))
             if not self._user:
                 # If no user match, ask
                 userList = self.use1Client.list_users(AwsAccountId=self.account_id, Namespace='default').get('UserList')
@@ -199,10 +201,7 @@ class QuickSight():
                             value=user
                         )
                     )
-                try:
-                    self._user =  questionary.select("Please select QuickSight to use", choices=selection).ask()
-                except:
-                    return None
+                self._user =  questionary.select("Please select QuickSight user to use", choices=selection).ask()
             logger.info(f"Using QuickSight user {self._user.get('UserName')}")
         return self._user
 
@@ -251,7 +250,6 @@ class QuickSight():
                 try:
                     _dataset = self.describe_dataset(id=dataset_id)
                     if not _dataset:
-                        dashboard.datasets.update({dataset_id: 'missing'})
                         logger.info(f'Dataset "{dataset_id}" is missing')
                     else:
                         logger.info(f"Using dataset \"{_dataset.get('Name')}\" ({_dataset.get('DataSetId')} for {dashboard.name})")
@@ -266,7 +264,8 @@ class QuickSight():
             try:
                 template = self.describe_template(templateId, account_id=templateAccountId)
                 dashboard.sourceTemplate = template
-            except:
+            except Exception as e:
+                logger.debug(e, stack_info=True)
                 logger.info(f'Unable to describe template {templateId} in {templateAccountId}')
             self._dashboards.update({dashboardId: dashboard})
             logger.info(f"{dashboard.name} has {len(dashboard.datasets)} datasets")
@@ -326,7 +325,8 @@ class QuickSight():
         try:
             for v in self.list_data_sources():
                 self.describe_data_source(v.get('DataSourceId'))
-        except:
+        except Exception as e:
+            logger.debug(e, stack_info=True)
             for _,v in self.datasets.items():
                 for _,map in v.get('PhysicalTableMap').items():
                     self.describe_data_source(map.get('RelationalTable').get('DataSourceArn').split('/')[-1])
@@ -375,7 +375,8 @@ class QuickSight():
             else:
                 logger.debug(result)
                 return result.get('DashboardSummaryList')
-        except:
+        except Exception as e:
+            logger.debug(e, stack_info=True)
             return list()
 
     def list_data_sources(self) -> list:
@@ -392,18 +393,18 @@ class QuickSight():
         except self.client.exceptions.AccessDeniedException:
             logger.info('Access denied listing data sources')
             return list()
-        except:
+        except Exception as e:
+            logger.debug(e, stack_info=True)
             return list()
 
     def select_dashboard(self, force=False) -> str:
         """ Select from a list of discovered dashboards """
         selection = list()
         dashboard_id = None
+        if not self.dashboards:
+            return None
         for dashboard in self.dashboards.values():
-            if dashboard.health:
-                health = 'healthy' 
-            else:
-                health = 'unhealthy'
+            health = 'healthy' if dashboard.health else 'unhealthy'
             selection.append(
                 questionary.Choice(
                     title=f'{dashboard.name} ({dashboard.arn}, {health}, {dashboard.status})',
@@ -417,11 +418,14 @@ class QuickSight():
                 "Please select installation(s) from the list",
                 choices=selection
             ).ask()
-        except:
-            print('\nNo updates available or dashboard(s) is/are broken, use --force to allow selection\n')
+        except AttributeError as e:
+            # No updatable dashboards (selection is disabled)
+            logger.debug(e, exc_info=True, stack_info=True)
+        except Exception as e:
+            logger.exception(e)
         finally:
             return dashboard_id
-        
+
     def list_data_sets(self):
         parameters = {
             'AwsAccountId': self.account_id
@@ -435,7 +439,8 @@ class QuickSight():
                 return result.get('DataSetSummaries')
         except self.client.exceptions.AccessDeniedException:
             raise
-        except:
+        except Exception as e:
+            logger.debug(e, stack_info=True)
             return None
 
     def describe_dashboard(self, poll: bool=False, **kwargs) -> Union[None, Dashboard]:
@@ -479,7 +484,26 @@ class QuickSight():
             'AwsAccountId': self.account_id,
             'DashboardId': dashboard_id
         }
+        logger.info(f'Deleting dashboard {dashboard_id}')
         return self.client.delete_dashboard(**paramaters)
+
+    def delete_dataset(self, id: str) -> bool:
+        """ Deletes an AWS QuickSight dataset """
+
+        logger.info(f'Deleting dataset {id}')
+        try:
+            self.client.delete_data_set(
+                AwsAccountId=self.account_id,
+                DataSetId=id
+            )
+            self._datasets.pop(id)
+        except self.client.exceptions.AccessDeniedException:
+            logger.info('Access denied deleting dataset')
+        except self.client.exceptions.ResourceNotFoundException:
+            logger.info('Dataset does not exist')
+        else:
+            logger.info(f'Deleted dataset {id}')
+
 
     def describe_dataset(self, id) -> dict:
         """ Describes an AWS QuickSight dataset """
@@ -494,6 +518,24 @@ class QuickSight():
             except self.client.exceptions.AccessDeniedException:
                 logger.debug(f'No quicksight:DescribeDataSet permission or missing DataSetId {id}')
         return self._datasets.get(id, dict())
+
+    def discover_datasets(self):
+        """ Discover datasets in the account """
+
+        logger.info('Discovering datasets')
+        try:
+            for dataset in self.list_data_sets():
+                try:
+                    self.describe_dataset(dataset.get('DataSetId'))
+                except Exception as e:
+                    logger.debug(e, stack_info=True)
+                    continue
+        except self.client.exceptions.AccessDeniedException:
+            logger.info('Access denied listing datasets')
+        except Exception as e:
+            logger.debug(e, stack_info=True)
+            logger.info('No datasets found')
+
 
     def describe_data_source(self, id):
         """ Describes an AWS QuickSight data source """
@@ -519,7 +561,8 @@ class QuickSight():
         try:
             result = self.use1Client.describe_template(AwsAccountId=account_id,TemplateId=template_id)
             logger.debug(result)
-        except:
+        except Exception as e:
+            logger.debug(e, stack_info=True)
             print(f'Error: Template {template_id} is not available in account {account_id}')
             exit(1)
         return result.get('Template')
@@ -596,7 +639,6 @@ class QuickSight():
         except self.client.exceptions.ResourceExistsException:
             raise
         created_version = int(create_status['VersionArn'].split('/')[-1])
-        current_status = create_status['CreationStatus']
 
         # Poll for the current status of query as long as its not finished
         describe_parameters = {
@@ -604,6 +646,7 @@ class QuickSight():
             'VersionNumber': created_version
         }
         dashboard = self.describe_dashboard(poll=True, **describe_parameters)
+        self.discover_dashboard(dashboard.id)
         if not dashboard.health:
             failure_reason = dashboard.version.get('Errors')
             raise Exception(failure_reason)
