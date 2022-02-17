@@ -1959,7 +1959,7 @@ Resources:
     Properties:
       AwsAccountId: !Ref AWS::AccountId
       DashboardId: !Join [ '' , [ 'cudos' ,  !Ref Suffix ] ] 
-      Name: !Join [ '' , [ 'CUDOS' ,  !Ref Suffix ] ] 
+      Name: !Join [ '' , [ 'CUDOS (' ,  !Ref Suffix , ')' ] ] 
       DashboardPublishOptions:
         AdHocFilteringOption:
           AvailabilityStatus: DISABLED
@@ -1999,7 +1999,7 @@ Resources:
     Properties:
       AwsAccountId: !Ref AWS::AccountId
       DashboardId: !Join [ '' , [ 'cost_intelligence_dashboard' ,  !Ref Suffix ] ] 
-      Name: !Join [ '' , [ 'Cost Intelligence Dashboard' ,  !Ref Suffix ] ] 
+      Name: !Join [ '' , [ 'Cost Intelligence (' ,  !Ref Suffix , ')' ] ] 
       DashboardPublishOptions:
         AdHocFilteringOption:
           AvailabilityStatus: DISABLED
